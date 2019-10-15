@@ -1,0 +1,83 @@
+
+# RepData_PeerAssessment1
+## By Tristan Ficarro on `r format(Sys.time(), '%B %d, %Y')`
+
+First let's load and view the data.
+
+```{r echo=TRUE}
+rawdat <- read.csv("activity.csv")
+str(rawdat)
+```
+
+I notice some NA values. Let's see how many there are.
+
+```{r echo=TRUE}
+sum(is.na(rawdat$steps))
+```
+
+So we see that there are `r sum(is.na(rawdat$steps))` missing values. It may be good to investigate why, but for now I will simply exclude them.
+
+```{r echo=TRUE}
+dat <- rawdat[!(is.na(rawdat$steps)), ]
+str(dat)
+```
+
+Now that we have excluded the missing values, let's look at some plots.
+```{r echo=TRUE}
+datAgg <- aggregate(dat$steps,by = list(dat$date), sum)
+names(datAgg) <- c("Date", "Steps")
+hist(datAgg$Steps, col = "blue1", xlab = "Total # of Steps Daily", main = "Number of Daily Steps")
+```
+
+And now some summary data, including the mean and median.
+```{r echo=TRUE}
+summary(datAgg$Steps)
+```
+
+Let's look at a time series plot of the mean steps for each 5-minute interval.
+```{r echo=TRUE}
+datTS <- aggregate(dat$steps,by = list(dat$interval), mean)
+names(datTS) <- c("Interval", "averageSteps")
+with(datTS, plot(Interval, averageSteps, type = "l"))
+```
+
+The 5-minute interval with the most steps, on average, is `r datTS[datTS$averageSteps == max(datTS$averageSteps), 'Interval']`.
+
+As mentioned before, there are `sum(is.na(rawdat$steps))` missing values. Here is the code again.
+```{r echo=TRUE}
+sum(is.na(rawdat$steps))
+```
+
+Let's create a new data frame where we impute all missing values with the mean for that interval. Remember, we have stored the average steps per interval in the datTS data frame. We will store this new steps value in the newSteps column and use the mutate function with some ifelse logic.
+``` {r echo=TRUE,message=FALSE}
+library(dplyr)
+datFilled <- mutate(merge(datTS, rawdat, by.x = "Interval", by.y = "interval"), newSteps = ifelse(is.na(steps), averageSteps, steps))
+head(datFilled)
+```
+
+Let's look at a histogram and some summary data of our new data frame.
+```{r echo=TRUE}
+datAggFilled <- aggregate(datFilled$newSteps,by = list(datFilled$date), sum)
+names(datAggFilled) <- c("Date", "Steps")
+hist(datAggFilled$Steps, col = "blue1", xlab = "Total # of Steps Daily", main = "Number of Daily Steps")
+summary(datAggFilled$Steps)
+```
+
+Compared to our values above, we see that the histogram has a higher peak for the middle level of 10000-15000 daily steps. This is supported by the fact that the first quartile is higher, while the third quartile is lower. Our data is now stronger at the peak of the histogram.
+
+The mean and median of our two data frames do not vary by much. The median for the new data set jumped 1 step.
+
+Let's add a factor variable to our data frame to specify whether it is a weekday or now
+```{r echo=TRUE, message=FALSE}
+library(chron)
+datFilled <- mutate(datFilled, dayFactor = as.factor(ifelse(is.weekend(as.Date(datFilled$date)), "Weekend", "Weekday")))
+head(datFilled)
+```
+
+Now let's look at a plot separated by our new factor variable.
+```{r echo=TRUE}
+library(lattice)
+datTSFilled <- aggregate(datFilled$newSteps,by = list(datFilled$Interval, datFilled$dayFactor), mean)
+names(datTSFilled) <- c("Interval", "dayFactor", "averageSteps")
+with(datTSFilled, xyplot(averageSteps ~ Interval | dayFactor, type = "l", layout = c(1,2)))
+```
